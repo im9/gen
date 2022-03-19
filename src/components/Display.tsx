@@ -1,28 +1,61 @@
 import * as Tone from "tone";
 import Sketch from "react-p5";
 
+const NOTES = [
+  "C",
+  "C#", // d♭
+  "D",
+  "D#", // e♭
+  "E",
+  "F",
+  "F#", // g♭
+  "G",
+  "G#", // a♭
+  "A",
+  "A#", // b♭
+  "B",
+];
+
+const NOTES_LENGTH = ["1n", "2n", "4n", "8n", "16n", "32n"];
+
 export function Display(p5: any) {
   let x = 50;
   const y = 50;
   let player: any = null;
   const synth: any = [];
   let particles: any = [];
+  let heightNote: number = 0;
+  let options: any = {
+    frequency: 100,
+    harmonicity: 0.2,
+    modulationIndex: 3,
+    modulationEnvelope: {
+      attack: 0.1,
+      decay: 0.8,
+      sustain: 0.2,
+      release: 0.2,
+    },
+    volume: 2,
+  };
+  let filter = new Tone.Filter().toDestination();
 
   const preload = () => {
-    player = new Tone.Player(
-      "https://tonejs.github.io/audio/berklee/gong_1.mp3"
-    ).toDestination();
+    // player = new Tone.Player(
+    //   "https://tonejs.github.io/audio/berklee/gong_1.mp3"
+    // ).toDestination();
 
-    // player = new Tone.Sampler({
-    //   urls: {
-    //     A1: "A1.mp3",
-    //     A2: "A2.mp3",
-    //   },
-    //   baseUrl: "https://tonejs.github.io/audio/casio/",
-    //   onload: () => {
-    //     player.triggerAttackRelease("c3", 0.5);
-    //   },
-    // }).toDestination();
+    player = new Tone.Sampler({
+      urls: {
+        A1: "A1.mp3",
+        A2: "A2.mp3",
+      },
+      baseUrl: "https://tonejs.github.io/audio/casio/",
+      onload: () => {
+        player.triggerAttackRelease("c3", 0.5);
+      },
+    }).toDestination();
+
+    player.connect(filter);
   };
 
   const setup = (p5: any, canvasParentRef: Element) => {
@@ -31,10 +64,20 @@ export function Display(p5: any) {
     p5.noStroke();
     p5.frameRate(30);
 
+    heightNote = p5.windowHeight / 12;
+
     synth.push(new Tone.AMSynth().toDestination());
     synth.push(new Tone.Synth().toDestination());
-    synth.push(new Tone.FMSynth().toDestination());
+    synth.push(new Tone.FMSynth(options).toDestination());
     synth.push(new Tone.PolySynth(Tone.Synth).toDestination());
+
+    let synthTemp;
+    synthTemp = synth[2];
+    const toneReverb = new Tone.Reverb(10).toDestination();
+    const pitchShift = new Tone.PitchShift(3).toDestination();
+
+    player?.connect(toneReverb);
+    player?.connect(pitchShift);
   };
 
   const draw = (p5: any) => {
@@ -84,11 +127,26 @@ export function Display(p5: any) {
   }
 
   function mousePressed(p5: any) {
-    particles.push(createParticle(p5, p5.mouseX, p5.mouseY));
+    const noteIdx = Math.floor(p5.mouseY / heightNote);
+    const note = `${NOTES[noteIdx]}3`;
+    player.triggerAttackRelease(note, "1n");
 
-    let synthTemp;
-    synthTemp = synth[3];
-    synthTemp.triggerAttackRelease("C4", 1);
+    particles.push(createParticle(p5, p5.mouseX, p5.mouseY));
+  }
+
+  function mouseDragged(p5: any) {
+    let curve = Math.floor(p5.windowHeight - p5.mouseY) * 0.001;
+    if (curve > 1) {
+      curve = 1;
+    } else if (curve < 0) {
+      curve = 0;
+    }
+
+    options = {
+      ...options,
+      attack: curve,
+    };
+    player?.set(options);
   }
 
   function windowResized(p5: any) {
@@ -102,6 +160,7 @@ export function Display(p5: any) {
       draw={draw}
       windowResized={windowResized}
       mousePressed={mousePressed}
+      mouseDragged={mouseDragged}
     />
   );
 }
