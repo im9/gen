@@ -1,26 +1,23 @@
 import * as Tone from "tone";
 import Sketch from "react-p5";
+import Instrument, { NOTES } from "../../utils/instrument";
 
-const NOTES = [
-  "C",
-  "C#", // d♭
-  "D",
-  "D#", // e♭
-  "E",
-  "F",
-  "F#", // g♭
-  "G",
-  "G#", // a♭
-  "A",
-  "A#", // b♭
-  "B",
+const colors: number[][] = [
+  [255, 204, 0],
+  [255, 0, 4],
+  [255, 0, 196],
+  [0, 255, 223],
+  [255, 85, 0],
+  [0, 27, 255],
+  [254, 255, 0],
+  [39, 39, 39],
+  [240, 240, 240],
 ];
-
-const NOTES_LENGTH = ["1n", "2n", "4n", "8n", "16n", "32n"];
 
 export function Display(p5: any) {
   let x = 50;
   const y = 50;
+
   let player: any = null;
   const synth: any = [];
   let particles: any = [];
@@ -37,25 +34,20 @@ export function Display(p5: any) {
     },
     volume: 2,
   };
-  let filter = new Tone.Filter().toDestination();
+  let actRandomSeed = null;
+  let count = 6;
+
+  let fft: any = null;
+  let meter: any = null;
+
+  let beatThreshold = 0.1;
+  let pianoThreshold = 0.25;
+
+  let kick: any = null;
+  let hh: any = null;
 
   const preload = () => {
-    // player = new Tone.Player(
-    //   "https://tonejs.github.io/audio/berklee/gong_1.mp3"
-    // ).toDestination();
-
-    player = new Tone.Sampler({
-      urls: {
-        A1: "A1.mp3",
-        A2: "A2.mp3",
-      },
-      baseUrl: "https://tonejs.github.io/audio/casio/",
-      onload: () => {
-        player.triggerAttackRelease("c3", 0.5);
-      },
-    }).toDestination();
-
-    player.connect(filter);
+    player = new Instrument()?.ctx;
   };
 
   const setup = (p5: any, canvasParentRef: Element) => {
@@ -74,10 +66,42 @@ export function Display(p5: any) {
     let synthTemp;
     synthTemp = synth[2];
     const toneReverb = new Tone.Reverb(10).toDestination();
-    const pitchShift = new Tone.PitchShift(3).toDestination();
 
     player?.connect(toneReverb);
-    player?.connect(pitchShift);
+
+    p5.pixelDensity(2);
+    p5.strokeCap(p5.SQUARE);
+
+    fft = new Tone.Waveform(128);
+
+    // kick
+    meter = new Tone.Meter();
+    kick = new Tone.Player("/samples/808/BD0000.WAV").toDestination();
+    kick.connect(meter);
+
+    hh = new Tone.Player("/samples/808/CH.WAV").toDestination();
+    hh.connect(meter);
+
+    // piano
+    new Tone.Sequence(
+      (time, note) => {
+        player.triggerAttackRelease(note, 0.1, time);
+        particles.push(createParticle(p5, p5.mouseX, p5.mouseY));
+      },
+      [["A3", "A5"], "A3", "G4", ["A5", "F4"]]
+    ).start();
+
+    // kick
+    new Tone.Loop((time) => {
+      Tone.loaded().then(() => kick?.start());
+    }, "4n")?.start();
+
+    // hihat
+    new Tone.Loop((time) => {
+      Tone.loaded().then(() => hh?.start(time + 0.25));
+    }, "4n")?.start();
+
+    Tone.Transport.start();
   };
 
   const draw = (p5: any) => {
@@ -89,6 +113,15 @@ export function Display(p5: any) {
       updatePosition(particle);
       decreaseLife(particle);
       drawParticle(p5, particle);
+    }
+
+    const db = Math.pow(2, meter.getValue() / 6);
+    if (db >= beatThreshold) {
+      p5.ellipse(p5.width / 2, p5.height / 2, db * 500, db * 500);
+    }
+    if (db >= pianoThreshold) {
+      form(p5, x, y, 400);
+      form(p5, x + 800, y + 300, 400);
     }
   };
 
@@ -119,6 +152,13 @@ export function Display(p5: any) {
   }
 
   function drawParticle(p5: any, particle: any) {
+    // Testing for squareRecursion
+    if (particle.life) {
+      actRandomSeed = p5.random(10000);
+      p5.randomSeed(actRandomSeed);
+      squareRecursion(p5, 0, 0, p5.windowWidth, count);
+    }
+
     p5.push();
     p5.noStroke();
     p5.fill(255, 255, 255, particle.life * 255);
@@ -151,6 +191,73 @@ export function Display(p5: any) {
 
   function windowResized(p5: any) {
     p5.resizeCanvas(p5.windowWidth, p5.windowHeight);
+  }
+
+  function squareRecursion(
+    p5: any,
+    x: number,
+    y: number,
+    s: number,
+    n: number
+  ) {
+    p5.noFill();
+    p5.strokeWeight(1);
+    p5.stroke(getCol(p5));
+
+    const buffer = fft.getValue();
+    const len = buffer?.length;
+
+    // if (buffer) {
+    //   for (let i = 0; i < len; i++) {
+    //     const x = p5.map(i, 0, len, 0, p5.windowWidth);
+    //     const y = p5.map(Math.max(-100, buffer[i]), -1, 1, 0, p5.windowHeight);
+    //     p5.line(x, y, x + p5.random(100), y);
+    //   }
+    // }
+
+    n--;
+    if (n >= 0) {
+      const probability = p5.map(n, 0, count - 1, 0.8, 0);
+      const hs = s / 2;
+      // if (p5.random(1) > probability) {
+      //   squareRecursion(p5, x, y, hs, n);
+      //   console.log(x, y, hs, n);
+      // }
+      // if (p5.random(1) > probability) {
+      //   squareRecursion(p5, x + hs, y, hs, n);
+      // }
+      // if (p5.random(1) > probability) {
+      //   squareRecursion(p5, x + hs, y + hs, hs, n);
+      // }
+      // if (p5.random(1) > probability) {
+      //   squareRecursion(p5, x, y + hs, hs, n);
+      // }
+    }
+  }
+
+  function form(p5: any, x: number, y: number, s: number) {
+    const count = p5.random(4, 8);
+    const w = s / count;
+    const rw = p5.random(s / count);
+    p5.strokeWeight(rw);
+    p5.fill(getCol(p5));
+
+    if (p5.random(1) > 2.0 / 3.0) {
+      for (let i = x + w; i < x + s; i += w) {
+        p5.line(i, y, i, y + s);
+      }
+    } else if (p5.random(1) > 1.0 / 3.0) {
+      for (let i = y + w; i < y + s; i += w) {
+        p5.line(x, i, x + s, i);
+      }
+    } else if (p5.random(1) > 0.0 / 3.0) {
+      p5.noStroke();
+      p5.circle(x + s / 2, y + s / 2, s);
+    }
+  }
+
+  function getCol(p5: any) {
+    return colors[Math.floor(p5.random(colors.length))];
   }
 
   return (
