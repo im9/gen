@@ -1,11 +1,20 @@
-import React from 'react'
-import ReactDOM from 'react-dom'
-import './index.css'
-import App from './App'
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import "./index.css";
+import App from "./App";
+import { Lissajous } from "./components/Lissajous";
 
-ReactDOM.render(
+const rootElement: HTMLElement | null = document.getElementById("root");
+const root = rootElement ? createRoot(rootElement) : null;
+
+root?.render(
   <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-  document.getElementById('root')
-)
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<App />} />
+        <Route path="lissajous" element={<Lissajous />} />
+      </Routes>
+    </BrowserRouter>
+  </React.StrictMode>
+);

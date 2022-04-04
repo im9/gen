@@ -1,5 +1,5 @@
-import { Display } from "@/components/Display";
 import { css } from "@emotion/react";
+import { Display } from "@/components/Display";
 
 const styles = {
   app: css({
@@ -7,6 +7,8 @@ const styles = {
     backgroundColor: "#000",
   }),
 };
+
+const rootElement = document.getElementById("root");
 
 function App() {
   return (
